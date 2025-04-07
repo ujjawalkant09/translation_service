@@ -7,19 +7,23 @@ import (
 	"github.com/Jeffail/gabs"
 )
 
+const translateUrl = "https://translate.googleapis.com/translate_a/single"
+
 type RequestBody struct {
 	SourceLang string 
 	TargetLang string 
 	SourceText string 
 }
 
-cont translateUrl = "https://translate.googleapis.com/translate_a/single"
-
 func RequestTranslate(body *RequestBody, str chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", translateUrl, nil)
-
+	if err != nil {
+		log.Fatalf("Error creating request: %s", err)
+	}
 
 	query := req.URL.Query()
 	query.Add("client", "gtx")
@@ -30,53 +34,37 @@ func RequestTranslate(body *RequestBody, str chan string, wg *sync.WaitGroup) {
 
 	req.URL.RawQuery = query.Encode()
 
-	if err != nil {
-		log.Fatalf("1 There was a problem: %s", err)
-	}
-
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("2 There was a problem: %s", err)
+		log.Fatalf("Error making request: %s", err)
 	}
 
 	defer res.Body.Close()
 
 	if res.StatusCode == http.StatusTooManyRequests {
 		str <- "You have been rate limited, Try again later."
-		wg.Done()
 		return
 	}
 
 	parsedJson, err := gabs.ParseJSONBuffer(res.Body)
-
 	if err != nil {
-		log.Fatalf("3 There was a problem - %s", err)
+		log.Fatalf("Error parsing response: %s", err)
 	}
 
 	nestOne, err := parsedJson.ArrayElement(0)
 	if err != nil {
-		log.Fatalf("4 There was a problem - %s", err)
+		log.Fatalf("Error accessing first element: %s", err)
 	}
 
 	nestTwo, err := nestOne.ArrayElement(0)
 	if err != nil {
-		log.Fatalf("5 There was a problem - %s", err)
+		log.Fatalf("Error accessing second element: %s", err)
 	}
 
 	translatedStr, err := nestTwo.ArrayElement(0)
 	if err != nil {
-		log.Fatalf("6 There was a problem - %s", err)
+		log.Fatalf("Error accessing translated string: %s", err)
 	}
 
 	str <- translatedStr.Data().(string)
-	wg.Done()
-
-
-
-
-
-
-
-
-	client.Do(req)
 }
